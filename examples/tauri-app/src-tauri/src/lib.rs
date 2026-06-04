@@ -1,13 +1,14 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use crate::custom_menu::{custom_menu_receiver, open_custom_menu};
+use tauri_plugin_i18n::I18nConfig;
 
 mod custom_menu;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_i18n::init(None))
+        .plugin(tauri_plugin_i18n::init(I18nConfig::default()))
         .invoke_handler(tauri::generate_handler![open_custom_menu])
         .setup(move |app| {
             app.on_menu_event(|app_handle: &tauri::AppHandle, event| {

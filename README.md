@@ -138,23 +138,82 @@ This is useful when you use [GitHub Copilot](https://github.com/features/copilot
 
 <img src="https://user-images.githubusercontent.com/5518/262332592-7b6cf058-7ef4-4ec7-8dea-0aa3619ce6eb.gif" width="446" />
 
+## Configuration
+
+### Plugin Configuration (Runtime)
+
+The plugin accepts an `I18nConfig` struct:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `default_locale` | `String` | `"en"` | The default locale (e.g. `"en"`, `"zh-CN"`, `"fr"`) |
+| `runtime_locales_path` | `Option<String>` | `None` | Optional path to a directory containing locale files to load at runtime. These override bundled translations with the same keys. Useful for downloading translation packs or user-provided locale folders. |
+
+### Build-time Configuration (Environment Variables)
+
+Use these environment variables to control where `build.rs` looks for locale files at compile time:
+
+| Variable | Description |
+|----------|-------------|
+| `TAURI_I18N_LOCALES_PATH` | Absolute or relative path to your locales directory. When set, skips automatic detection entirely. |
+| `TAURI_I18N_PROJECT_DIR` | Absolute or relative path to your Tauri project directory (the parent of `src-tauri`). Useful in monorepos with multiple Tauri apps to disambiguate which one to use. |
+
+These can be set in your project's `.cargo/config.toml`:
+
+```toml
+[env]
+TAURI_I18N_LOCALES_PATH = "i18n/translations"
+# or for monorepos:
+# TAURI_I18N_PROJECT_DIR = "apps/desktop"
+```
+
+Or exported as regular environment variables before building.
+
 ## Usage
 
 First you need to register the core plugin with Tauri:
 
-The init method takes two args:
-
-- The location of the locales dir
-- Default locale (eg: "en")
-
-<br/>
-
 `src-tauri/src/lib.rs`
 
 ```rust
+use tauri_plugin_i18n::I18nConfig;
+
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_i18n::init(None))
+        // Use defaults (locale "en", no runtime overrides, auto-detect locales path)
+        .plugin(tauri_plugin_i18n::init(I18nConfig::default()))
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+**With a custom default locale:**
+
+```rust
+use tauri_plugin_i18n::I18nConfig;
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_i18n::init(I18nConfig {
+            default_locale: "fr".to_string(),
+            ..Default::default()
+        }))
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+**With runtime locale overrides:**
+
+```rust
+use tauri_plugin_i18n::I18nConfig;
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_i18n::init(I18nConfig {
+            runtime_locales_path: Some("/path/to/external/locales".to_string()),
+            ..Default::default()
+        }))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
