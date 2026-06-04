@@ -4,6 +4,41 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::backend::load_data;
 
+/// Configuration for the i18n plugin.
+///
+/// Allows customizing the default locale, and optionally specifying
+/// a runtime path to load locale overrides from.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use tauri_plugin_i18n::I18nConfig;
+///
+/// let config = I18nConfig {
+///     default_locale: "fr".to_string(),
+///     runtime_locales_path: Some("/path/to/locales".to_string()),
+/// };
+/// ```
+#[derive(Debug, Clone)]
+pub struct I18nConfig {
+    /// The default locale to use (e.g. "en", "zh-CN").
+    /// Defaults to "en".
+    pub default_locale: String,
+    /// Optional path to a directory of locale files to load at runtime.
+    /// Files in this directory override bundled translations with the same keys.
+    /// Defaults to `None` (runtime loading disabled).
+    pub runtime_locales_path: Option<String>,
+}
+
+impl Default for I18nConfig {
+    fn default() -> Self {
+        Self {
+            default_locale: "en".to_string(),
+            runtime_locales_path: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PluginI18n<R: Runtime> {
     pub app: AppHandle<R>,
@@ -13,14 +48,14 @@ pub struct PluginI18n<R: Runtime> {
 
 impl<R: Runtime> PluginI18n<R> {
     ///
-    /// Initialize the data using the locale
+    /// Initialize the i18n plugin with the given configuration.
     ///
-    pub fn new(app: tauri::AppHandle<R>, locale: String) -> Self {
-        let data = load_data(None);
+    pub fn new(app: tauri::AppHandle<R>, config: I18nConfig) -> Self {
+        let data = load_data(config.runtime_locales_path.as_deref());
         Self {
             app,
             data,
-            locale: Mutex::new(locale),
+            locale: Mutex::new(config.default_locale),
         }
     }
 
