@@ -25,6 +25,12 @@ fn main() {
 
 fn should_bundle_locales() -> bool {
     let out_dir = env::var("OUT_DIR").unwrap();
+
+    // If TAURI_I18N_LOCALES_PATH is set explicitly, we always try to bundle
+    if env::var("TAURI_I18N_LOCALES_PATH").is_ok() {
+        return true;
+    }
+
     find_workspace_root(Path::new(&out_dir)).is_some()
 }
 
@@ -39,6 +45,8 @@ fn generate_empty_bundled_locales() {
     fs::write(dest_path, code).expect("Failed to write bundled_locales.rs");
 }
 
+/// Find the workspace root and return the parent directory of the `src-tauri` directory.
+/// This is used as the base for resolving relative locale paths.
 fn find_workspace_root(start_dir: &Path) -> Option<PathBuf> {
     let mut current = start_dir;
     while let Some(parent) = current.parent() {
@@ -87,17 +95,91 @@ fn find_src_tauri(root: &Path) -> Option<PathBuf> {
     None
 }
 
+fn resolve_locales_path() -> PathBuf {
+    println!("cargo:rerun-if-env-changed=TAURI_I18N_LOCALES_PATH");
+    println!("cargo:rerun-if-env-changed=TAURI_I18N_PROJECT_DIR");
+
+    // 1. Check for explicit locales path (absolute or relative to workspace)
+    if let Ok(explicit_path) = env::var("TAURI_I18N_LOCALES_PATH") {
+        let path = Path::new(&explicit_path);
+        let resolved = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            // Relative to the project directory (or workspace root as fallback)
+            let base = resolve_project_dir();
+            base.join(path)
+        };
+
+        println!(
+            "cargo:info=Using explicit locales path: {}",
+            resolved.display()
+        );
+
+        if !resolved.exists() {
+            panic!(
+                "TAURI_I18N_LOCALES_PATH is set but path does not exist: {}",
+                resolved.display()
+            );
+        }
+
+        return resolved;
+    }
+
+    // 2. Fallback: find src-tauri/locales under workspace
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let workspace_root = find_workspace_root(Path::new(&out_dir))
+        .expect("Could not find workspace root. Set TAURI_I18N_LOCALES_PATH or TAURI_I18N_PROJECT_DIR to point at your project.");
+
+    let locales_path = workspace_root.join("src-tauri").join("locales");
+    println!(
+        "cargo:info=Using auto-detected locales path: {}",
+        locales_path.display()
+    );
+    locales_path
+}
+
+/// Resolve the base directory for relative paths.
+///
+/// Uses `TAURI_I18N_PROJECT_DIR` if set; otherwise falls back to
+/// finding the workspace root + src-tauri parent.
+fn resolve_project_dir() -> PathBuf {
+    if let Ok(project_dir) = env::var("TAURI_I18N_PROJECT_DIR") {
+        let path = Path::new(&project_dir);
+        let resolved = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            // Relative to current working directory
+            env::current_dir().unwrap().join(path)
+        };
+
+        println!(
+            "cargo:info=Using project directory: {}",
+            resolved.display()
+        );
+
+        if !resolved.exists() {
+            panic!(
+                "TAURI_I18N_PROJECT_DIR is set but path does not exist: {}",
+                resolved.display()
+            );
+        }
+
+        return resolved;
+    }
+
+    // Fallback: find workspace root + src-tauri parent
+    let out_dir = env::var("OUT_DIR").unwrap();
+    find_workspace_root(Path::new(&out_dir))
+        .expect("Could not find project root. Set TAURI_I18N_PROJECT_DIR to point at your project directory.")
+}
+
 fn bundle_locales() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("bundled_locales.rs");
 
     println!("cargo:info=OUT_DIR: {}", out_dir);
 
-    // Find workspace root by walking up from OUT_DIR
-    let workspace_root = find_workspace_root(Path::new(&out_dir))
-        .expect("Could not find workspace root (looking for src-tauri directory)");
-
-    let locales_path = workspace_root.join("src-tauri").join("locales");
+    let locales_path = resolve_locales_path();
 
     println!(
         "cargo:info=Looking for locales at: {}",
